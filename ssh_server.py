@@ -6,11 +6,14 @@ import socket
 import sys
 import threading
 import traceback
+import selectors
+from docker import DockerClient
 
 
 CWD = os.path.dirname(os.path.realpath(__file__))
 HOSTKEY = paramiko.RSAKey(filename='/home/sujiwo/.ssh/servers/server_rsa.key')
 SSH_BANNER = "SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.3"
+dockerConn = DockerClient('ssh://172.17.69.69')
 
 
 class Server(paramiko.ServerInterface):
@@ -36,6 +39,7 @@ class Server(paramiko.ServerInterface):
         return True
     
     def check_channel_shell_request(self, channel):
+        _, self.dockersock = dockerConn.containers.get('jp1').exec_run('/bin/bash', stdin=True, stdout=True, stderr=True, socket=True)
         self.event.set()
         return True
     
@@ -95,27 +99,51 @@ def handle_connection(client, addr):
         if not server.event.is_set():
             print('*** Client never asked for a shell.')
             raise Exception("No shell request")
+        
+        poller = selectors.DefaultSelector()
+        poller.register(chan.fileno(), selectors.EVENT_READ, 1)
+        poller.register(server.dockersock.fileno(), selectors.EVENT_READ, 2)
 
         try:
             chan.send("Welcome to the my control server\r\n\r\n")
             run = True
+            cmd = bytearray()
             while run:
-                chan.send("$ ")
-                command = ""
-                while not command.endswith("\r"):
-                    transport = chan.recv(1024)
-                    # Echo input to psuedo-simulate a basic terminal
-                    chan.send(transport)
-                    command += transport.decode("utf-8")
-
-                chan.send("\r\n")
-                command = command.rstrip()
-#                LOG.write("$ " + command + "\n")
-                print(command)
-                if command == "exit":
-                    run = False
-                else:
-                    handle_cmd(command, chan)
+                events = poller.select()
+                for key,_ in events:
+                    if key.data==1:
+                        bt = chan.recv(1024)
+                        chan.send(bt)
+                        cmd = cmd+bt
+                        if cmd.decode("utf-8").endswith("\r"):
+                            chan.send("\r\n")
+                            cmd = cmd.rstrip()
+                            # XXX: Inefficient; should send bytes to shell
+                            cmd = cmd.decode("utf-8")
+                            print("Sending: "+cmd)
+                            server.dockersock.send(cmd+"\n")
+                            cmd = bytearray()
+                    elif key.data==2:
+                        bt = server.dockersock.recv(1024)
+                        chan.send(bt)
+                # XXX: Handle exit
+                
+#                 chan.send("$ ")
+#                 command = ""
+#                 while not command.endswith("\r"):
+#                     transport = chan.recv(1024)
+#                     # Echo input to psuedo-simulate a basic terminal
+#                     chan.send(transport)
+#                     command += transport.decode("utf-8")
+#
+#                 chan.send("\r\n")
+#                 command = command.rstrip()
+# #                LOG.write("$ " + command + "\n")
+#                 print(command)
+#                 if command == "exit":
+#                     run = False
+#                 else:
+#                     handle_cmd(command, chan)
 
         except Exception as err:
             print('!!! Exception: {}: {}'.format(err.__class__, err))
