@@ -39,7 +39,7 @@ class Server(paramiko.ServerInterface):
         return True
     
     def check_channel_shell_request(self, channel):
-        _, self.dockersock = dockerConn.containers.get('jp1').exec_run('/bin/bash', stdin=True, stdout=True, stderr=True, socket=True)
+        _, self.dockersock = dockerConn.containers.get('jp1').exec_run('/bin/bash -l', stdin=True, stdout=True, stderr=True, tty=True, socket=True)
         print("Logged in")
         self.event.set()
         return True
@@ -114,37 +114,16 @@ def handle_connection(client, addr):
                 for key,_ in events:
                     if key.data==1:
                         bt = chan.recv(1024)
-                        chan.send(bt)
-                        cmd = cmd+bt
-                        if cmd.decode("utf-8").endswith("\r"):
-                            chan.send("\r\n")
-                            cmd = cmd.rstrip()
-                            # XXX: Inefficient; should send bytes to shell
-                            cmd = cmd.decode("utf-8")
-                            print("Sending: "+cmd)
-                            server.dockersock.send(cmd+"\n")
-                            cmd = bytearray()
+                        if len(bt)==0:
+                            run = False
+                            break
+                        server.dockersock.send(bt)
                     elif key.data==2:
                         bt = server.dockersock.recv(1024)
+                        if len(bt)==0:
+                            run = False
+                            break
                         chan.send(bt)
-                # XXX: Handle exit
-                
-#                 chan.send("$ ")
-#                 command = ""
-#                 while not command.endswith("\r"):
-#                     transport = chan.recv(1024)
-#                     # Echo input to psuedo-simulate a basic terminal
-#                     chan.send(transport)
-#                     command += transport.decode("utf-8")
-#
-#                 chan.send("\r\n")
-#                 command = command.rstrip()
-# #                LOG.write("$ " + command + "\n")
-#                 print(command)
-#                 if command == "exit":
-#                     run = False
-#                 else:
-#                     handle_cmd(command, chan)
 
         except Exception as err:
             print('!!! Exception: {}: {}'.format(err.__class__, err))
