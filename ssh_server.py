@@ -13,7 +13,7 @@ from docker import DockerClient
 CWD = os.path.dirname(os.path.realpath(__file__))
 HOSTKEY = paramiko.RSAKey(filename='/home/sujiwo/.ssh/servers/server_rsa.key')
 SSH_BANNER = "SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.3"
-dockerConn = DockerClient('ssh://172.17.69.69')
+dockerConn = DockerClient('ssh://eowyn.local')
 
 
 class Server(paramiko.ServerInterface):
@@ -40,6 +40,7 @@ class Server(paramiko.ServerInterface):
     
     def check_channel_shell_request(self, channel):
         _, self.dockersock = dockerConn.containers.get('jp1').exec_run('/bin/bash', stdin=True, stdout=True, stderr=True, socket=True)
+        print("Logged in")
         self.event.set()
         return True
     
