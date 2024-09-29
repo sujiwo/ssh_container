@@ -15,6 +15,7 @@ HOSTKEY = paramiko.RSAKey(filename='/home/sujiwo/.ssh/servers/server_rsa.key')
 SSH_BANNER = "SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.3"
 dockerConn = DockerClient('ssh://eowyn.local')
 
+# TODO: Replace threading with multiprocessing
 
 class Server(paramiko.ServerInterface):
     def __init__(self):
@@ -36,10 +37,14 @@ class Server(paramiko.ServerInterface):
         channel.set_combine_stderr(True)
         self.stdouterr = channel.makefile_stderr()
         self.stdin = channel.makefile_stdin()
+        self.width= width
+        self.height = height
         return True
     
     def check_channel_shell_request(self, channel):
         _, self.dockersock = dockerConn.containers.get('jp1').exec_run('/bin/bash -l', stdin=True, stdout=True, stderr=True, tty=True, socket=True)
+        # how to create file:
+        # _, sock = cli.containers.get('ubuntu').exec_run('/bin/tee /tmp/file.txt', stdin=True, stdout=True, stderr=False, tty=False, socket=True)
         print("Logged in")
         self.event.set()
         return True
@@ -142,55 +147,6 @@ def handle_connection(client, addr):
             transport.close()
         except Exception:
             pass
-
-def handle_cmd(cmd, chan):
-    """Branching statements to handle and prepare a response for a command"""
-    response = ""
-    if cmd.startswith("sudo"):
-        send_ascii("sudo.txt", chan)
-        return
-    elif cmd.startswith("ls"):
-        response = "pw.txt"
-    elif cmd.startswith("version"):
-        response = "Super Amazing Awesome (tm) Shell v1.1"
-    elif cmd.startswith("pwd"):
-        response = "/home/clippy"
-    elif cmd.startswith("cd"):
-        send_ascii("cd.txt", chan)
-        return
-    elif cmd.startswith("cat"):
-        send_ascii("cat.txt", chan)
-        return
-    elif cmd.startswith("rm"):
-        send_ascii("bomb.txt", chan)
-        response = "You blew up our files! How could you???"
-    elif cmd.startswith("whoami"):
-        send_ascii("wizard.txt", chan)
-        response = "You are a wizard of the internet!"
-    elif ".exe" in cmd:
-        response = "Hmm, trying to access .exe files from an ssh terminal..... Your methods are unconventional"
-    elif cmd.startswith("cmd"):
-        response = "Command Prompt? We only use respectable shells on this machine.... Sorry"
-    elif cmd == "help":
-        send_ascii("help.txt", chan)
-        return
-    else:
-        send_ascii("clippy.txt", chan)
-        response = "Use the 'help' command to view available commands"
-
-    # LOG.write(response + "\n")
-    # LOG.flush()
-    chan.send(response + "\r\n")
-
-def send_ascii(filename, chan):
-    """Print ascii from a file and send it to the channel"""
-    with open('ascii/{}'.format(filename)) as text:
-        chan.send("\r")
-        for line in enumerate(text):
-            # LOG.write(line[1])
-            chan.send(line[1] + "\r")
-    # LOG.flush()
-
 
 if __name__=='__main__':
     address = '127.0.0.1'
