@@ -8,6 +8,7 @@ import threading
 import traceback
 import selectors
 from docker import DockerClient
+from docker_sftp import *
 
 
 CWD = os.path.dirname(os.path.realpath(__file__))
@@ -18,6 +19,8 @@ dockerConn = DockerClient('ssh://eowyn.local')
 # TODO: Replace threading with multiprocessing
 
 class Server(paramiko.ServerInterface):
+    containerName = 'jp1'
+    
     def __init__(self):
         self.event = threading.Event()
         
@@ -42,7 +45,7 @@ class Server(paramiko.ServerInterface):
         return True
     
     def check_channel_shell_request(self, channel):
-        _, self.dockersock = dockerConn.containers.get('jp1').exec_run('/bin/bash -l', stdin=True, stdout=True, stderr=True, tty=True, socket=True)
+        _, self.dockersock = dockerConn.containers.get(self.containerName).exec_run('/bin/bash -l', stdin=True, stdout=True, stderr=True, tty=True, socket=True)
         print("Logged in")
         self.event.set()
         return True
@@ -87,6 +90,7 @@ def handle_connection(client, addr):
         transport.add_server_key(HOSTKEY)
         # Change banner to appear legit on nmap (or other network) scans
         transport.local_version = SSH_BANNER
+        transport.set_subsystem_handler('sftp', paramiko.SFTPServer, Docker_SFTP_Server)
         server = Server()
         try:
             transport.start_server(server=server)
