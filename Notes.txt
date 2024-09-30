@@ -1,0 +1,14 @@
+how to copy file to container:
+_, sock = cli.containers.get('ubuntu').exec_run('/bin/tee /tmp/file.txt', stdin=True, stdout=True, stderr=False, tty=False, socket=True)
+fd=open('file.png', 'rb')
+while (c := fd.read(n)):
+    process(c)
+
+How to copy file from container:
+_, sock=cli.containers.get('jp1').exec_run('/bin/cat /usr/bin/who', stdin=False, stdout=True, stderr=False, tty=False, stream=True)
+fd=open('file.png', 'wb')
+for c in sock:
+    fd.write(c)
+
+paramiko.sftp_server.SFTPServer
+

@@ -43,8 +43,6 @@ class Server(paramiko.ServerInterface):
     
     def check_channel_shell_request(self, channel):
         _, self.dockersock = dockerConn.containers.get('jp1').exec_run('/bin/bash -l', stdin=True, stdout=True, stderr=True, tty=True, socket=True)
-        # how to create file:
-        # _, sock = cli.containers.get('ubuntu').exec_run('/bin/tee /tmp/file.txt', stdin=True, stdout=True, stderr=False, tty=False, socket=True)
         print("Logged in")
         self.event.set()
         return True
