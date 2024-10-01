@@ -50,6 +50,10 @@ class Server(paramiko.ServerInterface):
         self.height = height
         return True
     
+    def check_channel_subsystem_request(self, channel, name):
+        if name=='sftp':
+            return True
+    
     def check_channel_shell_request(self, channel):
         _, self.dockersock = self.container.exec_run('/bin/bash -l', stdin=True, stdout=True, stderr=True, tty=True, socket=True)
         print("Logged in")
