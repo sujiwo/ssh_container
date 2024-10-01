@@ -26,6 +26,7 @@ class Server(paramiko.ServerInterface):
         self.dockerCli = _cli
         self.event = threading.Event()
         self.container = None
+        self.shellRequest = False
         
     def get_allowed_auths(self, username):
         return 'password'
@@ -53,7 +54,40 @@ class Server(paramiko.ServerInterface):
         _, self.dockersock = self.container.exec_run('/bin/bash -l', stdin=True, stdout=True, stderr=True, tty=True, socket=True)
         print("Logged in")
         self.event.set()
+        self.shellRequest = True
         return True
+    
+    def shell_session(self, channel):
+        poller = selectors.DefaultSelector()
+        poller.register(channel.fileno(), selectors.EVENT_READ, 1)
+        poller.register(self.dockersock.fileno(), selectors.EVENT_READ, 2)
+
+        try:
+            channel.send("Welcome to the my control server\r\n\r\n")
+            run = True
+            while run:
+                events = poller.select()
+                for key,_ in events:
+                    if key.data==1:
+                        cmd = channel.recv(1024)
+                        if len(cmd)==0:
+                            run = False
+                            break
+                        self.dockersock.send(cmd)
+                    elif key.data==2:
+                        cmd = self.dockersock.recv(1024)
+                        if len(cmd)==0:
+                            run = False
+                            break
+                        channel.send(cmd)
+
+        except Exception as err:
+            print('!!! Exception: {}: {}'.format(err.__class__, err))
+            traceback.print_exc()
+            try:
+                channel.transport.close()
+            except Exception:
+                pass
     
 
 def start_server(port, address):
@@ -83,12 +117,12 @@ def start_server(port, address):
     for thread in threads:
         thread.join()
 
-def handle_connection(client, addr):
+def handle_connection(connection, addr):
     """Handle a new ssh connection"""
 #    LOG.write("\n\nConnection from: " + addr[0] + "\n")
     print('Got a connection!')
     try:
-        transport = paramiko.Transport(client)
+        transport = paramiko.Transport(connection)
         transport.add_server_key(HOSTKEY)
         # Change banner to appear legit on nmap (or other network) scans
         transport.local_version = SSH_BANNER
@@ -104,44 +138,11 @@ def handle_connection(client, addr):
         if chan is None:
             print('*** No channel.')
             raise Exception("No channel")
-
-        server.event.wait(10)
-        if not server.event.is_set():
-            print('*** Client never asked for a shell.')
-            raise Exception("No shell request")
         
-        poller = selectors.DefaultSelector()
-        poller.register(chan.fileno(), selectors.EVENT_READ, 1)
-        poller.register(server.dockersock.fileno(), selectors.EVENT_READ, 2)
-
-        try:
-            chan.send("Welcome to the my control server\r\n\r\n")
-            run = True
-            while run:
-                events = poller.select()
-                for key,_ in events:
-                    if key.data==1:
-                        cmd = chan.recv(1024)
-                        if len(cmd)==0:
-                            run = False
-                            break
-                        server.dockersock.send(cmd)
-                    elif key.data==2:
-                        cmd = server.dockersock.recv(1024)
-                        if len(cmd)==0:
-                            run = False
-                            break
-                        chan.send(cmd)
-
-        except Exception as err:
-            print('!!! Exception: {}: {}'.format(err.__class__, err))
-            traceback.print_exc()
-            try:
-                transport.close()
-            except Exception:
-                pass
-
-        chan.close()
+        server.event.wait(10)
+        if server.shellRequest==True:
+            server.shell_session(chan)        
+            chan.close()
 
     except Exception as err:
         print('!!! Exception: {}: {}'.format(err.__class__, err))

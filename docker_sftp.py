@@ -48,8 +48,27 @@ class Docker_SFTP_Server (SFTPServerInterface):
         self.container = server.container
     
     def list_folder(self, path):
-        outs = self.container.exec_run([*statcmd, *lines], stream=True)
-        return SFTPServerInterface.list_folder(self, path)
+        buffer = self.exec_collect(['/bin/ls', path])
+        lines = buffer.split(b'\n')
+        lines.pop()
+        btpath = bytearray(path, 'utf-8')
+        for i in range(len(lines)):
+            lines[i] = btpath+lines[i]
+
+        return parse_terse_stats(buffer)
+    
+    def exec_collect(self, cmds):
+        outs = self.container.exec_run(cmds, stream=True)
+        buffer = bytearray()
+        for c in outs:
+            buffer += c
+        return buffer
+    
+    def stat(self, path):
+        buffer = self.exec_collect(['/bin/stat', path])
+        buffer.rtrim()
+        
+        pass
     
 if __name__=='__main__':
     import subprocess
