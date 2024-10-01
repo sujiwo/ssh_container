@@ -25,6 +25,7 @@ class Server(paramiko.ServerInterface):
     def __init__(self, _cli):
         self.dockerCli = _cli
         self.event = threading.Event()
+        self.container = None
         
     def get_allowed_auths(self, username):
         return 'password'
@@ -36,6 +37,7 @@ class Server(paramiko.ServerInterface):
     
     def check_auth_password(self, username, password):
         if (username=='whoami') and (password=='secret'):
+            self.container = self.dockerCli.containers.get(self.containerName)
             return paramiko.AUTH_SUCCESSFUL
         # XXX: Perform user authorization from here 
         
@@ -48,7 +50,7 @@ class Server(paramiko.ServerInterface):
         return True
     
     def check_channel_shell_request(self, channel):
-        _, self.dockersock = self.dockerCli.containers.get(self.containerName).exec_run('/bin/bash -l', stdin=True, stdout=True, stderr=True, tty=True, socket=True)
+        _, self.dockersock = self.container.exec_run('/bin/bash -l', stdin=True, stdout=True, stderr=True, tty=True, socket=True)
         print("Logged in")
         self.event.set()
         return True
