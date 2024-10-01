@@ -14,14 +14,16 @@ from docker_sftp import *
 CWD = os.path.dirname(os.path.realpath(__file__))
 HOSTKEY = paramiko.RSAKey(filename='/home/sujiwo/.ssh/servers/server_rsa.key')
 SSH_BANNER = "SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.3"
-dockerConn = DockerClient('ssh://eowyn.local')
+dockerCli = DockerClient('ssh://eowyn.local')
 
 # TODO: Replace threading with multiprocessing
 
 class Server(paramiko.ServerInterface):
+    # dockerHost = 
     containerName = 'jp1'
     
-    def __init__(self):
+    def __init__(self, _cli):
+        self.dockerCli = _cli
         self.event = threading.Event()
         
     def get_allowed_auths(self, username):
@@ -35,6 +37,7 @@ class Server(paramiko.ServerInterface):
     def check_auth_password(self, username, password):
         if (username=='whoami') and (password=='secret'):
             return paramiko.AUTH_SUCCESSFUL
+        # XXX: Perform user authorization from here 
         
     def check_channel_pty_request(self, channel, term, width, height, pixelwidth, pixelheight, modes):
         channel.set_combine_stderr(True)
@@ -45,15 +48,12 @@ class Server(paramiko.ServerInterface):
         return True
     
     def check_channel_shell_request(self, channel):
-        _, self.dockersock = dockerConn.containers.get(self.containerName).exec_run('/bin/bash -l', stdin=True, stdout=True, stderr=True, tty=True, socket=True)
+        _, self.dockersock = self.dockerCli.containers.get(self.containerName).exec_run('/bin/bash -l', stdin=True, stdout=True, stderr=True, tty=True, socket=True)
         print("Logged in")
         self.event.set()
         return True
     
-    # def check_channel_shell_request(self, channel):
-    #     return True
-    
-    
+
 def start_server(port, address):
     """Init and run the ssh server"""
     try:
@@ -91,7 +91,7 @@ def handle_connection(client, addr):
         # Change banner to appear legit on nmap (or other network) scans
         transport.local_version = SSH_BANNER
         transport.set_subsystem_handler('sftp', paramiko.SFTPServer, Docker_SFTP_Server)
-        server = Server()
+        server = Server(dockerCli)
         try:
             transport.start_server(server=server)
         except paramiko.SSHException:
@@ -115,22 +115,21 @@ def handle_connection(client, addr):
         try:
             chan.send("Welcome to the my control server\r\n\r\n")
             run = True
-            cmd = bytearray()
             while run:
                 events = poller.select()
                 for key,_ in events:
                     if key.data==1:
-                        bt = chan.recv(1024)
-                        if len(bt)==0:
+                        cmd = chan.recv(1024)
+                        if len(cmd)==0:
                             run = False
                             break
-                        server.dockersock.send(bt)
+                        server.dockersock.send(cmd)
                     elif key.data==2:
-                        bt = server.dockersock.recv(1024)
-                        if len(bt)==0:
+                        cmd = server.dockersock.recv(1024)
+                        if len(cmd)==0:
                             run = False
                             break
-                        chan.send(bt)
+                        chan.send(cmd)
 
         except Exception as err:
             print('!!! Exception: {}: {}'.format(err.__class__, err))

@@ -15,7 +15,7 @@ class Docker_SFTP_Handle (SFTPHandle):
 
 class Docker_SFTP_Server (SFTPServerInterface):
     def __init__(self, server):
-        pass
+        self.dockercli = server.containerName
     
     def list_folder(self, path):
         return SFTPServerInterface.list_folder(self, path)
