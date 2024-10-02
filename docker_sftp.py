@@ -44,8 +44,18 @@ class Docker_SFTP_Handle (SFTPHandle):
 
 
 class Docker_SFTP_Server (SFTPServerInterface):
-    def __init__(self, server):
+    
+    def __init__(self, server, *args, **kwargs):
         self.container = server.container
+        
+    def session_started(self):
+        SFTPServerInterface.session_started(self)
+        
+    def session_ended(self):
+        SFTPServerInterface.session_ended(self)
+        
+    def canonicalize(self, path):
+        return SFTPServerInterface.canonicalize(self, path)
     
     def list_folder(self, path):
         buffer = self.exec_collect(['/bin/ls', path])

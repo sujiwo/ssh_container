@@ -12,7 +12,7 @@ from docker_sftp import *
 
 
 CWD = os.path.dirname(os.path.realpath(__file__))
-HOSTKEY = paramiko.RSAKey(filename='/home/sujiwo/.ssh/servers/server_rsa.key')
+HOSTKEY = paramiko.RSAKey(filename=CWD+'/key/server_rsa.key')
 SSH_BANNER = "SSH-2.0-OpenSSH_8.2p1 Ubuntu-4ubuntu0.3"
 dockerCli = DockerClient('ssh://eowyn.local')
 
@@ -40,7 +40,7 @@ class Server(paramiko.ServerInterface):
         if (username=='whoami') and (password=='secret'):
             self.container = self.dockerCli.containers.get(self.containerName)
             return paramiko.AUTH_SUCCESSFUL
-        # XXX: Perform user authorization from here 
+        # XXX: Perform user authorization (ie. which container that user can access into) from here 
         
     def check_channel_pty_request(self, channel, term, width, height, pixelwidth, pixelheight, modes):
         channel.set_combine_stderr(True)
@@ -49,10 +49,6 @@ class Server(paramiko.ServerInterface):
         self.width= width
         self.height = height
         return True
-    
-    def check_channel_subsystem_request(self, channel, name):
-        if name=='sftp':
-            return True
     
     def check_channel_shell_request(self, channel):
         _, self.dockersock = self.container.exec_run('/bin/bash -l', stdin=True, stdout=True, stderr=True, tty=True, socket=True)
@@ -128,9 +124,9 @@ def handle_connection(connection, addr):
     try:
         transport = paramiko.Transport(connection)
         transport.add_server_key(HOSTKEY)
+        transport.set_subsystem_handler('sftp', paramiko.SFTPServer, Docker_SFTP_Server)
         # Change banner to appear legit on nmap (or other network) scans
         transport.local_version = SSH_BANNER
-        transport.set_subsystem_handler('sftp', paramiko.SFTPServer, Docker_SFTP_Server)
         server = Server(dockerCli)
         try:
             transport.start_server(server=server)
@@ -143,7 +139,7 @@ def handle_connection(connection, addr):
             print('*** No channel.')
             raise Exception("No channel")
         
-        server.event.wait(10)
+        server.event.wait(1.0)
         if server.shellRequest==True:
             server.shell_session(chan)        
             chan.close()
