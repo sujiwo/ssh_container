@@ -147,6 +147,8 @@ def handle_connection(connection, addr):
         if server.shellRequest==True:
             server.shell_session(chan)        
             chan.close()
+        else:
+            transport.join()
 
     except Exception as err:
         print('!!! Exception: {}: {}'.format(err.__class__, err))
