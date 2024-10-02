@@ -76,9 +76,18 @@ class Docker_SFTP_Server (SFTPServerInterface):
         return buffer
     
     def stat(self, path):
+        path = self.realpath(path).rstrip()
         buffer = self.exec_collect([*statcmd, path])
         fst = parse_terse_stats(buffer)
         return fst[0]
+    
+    def realpath(self, path):
+        buffer = self.exec_collect(['/bin/realpath', path])
+        return buffer.decode('utf-8')
+    
+    def open(self, path, flags, attr):
+        pass
+    
     
 if __name__=='__main__':
     import subprocess
