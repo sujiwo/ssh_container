@@ -86,6 +86,8 @@ class Docker_SFTP_Server (SFTPServerInterface):
         return buffer.decode('utf-8')
     
     def open(self, path, flags, attr):
+        path = self.realpath(path)
+        
         pass
     
     
