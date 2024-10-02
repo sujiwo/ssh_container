@@ -11,12 +11,12 @@ from paramiko import ServerInterface, SFTPServerInterface, SFTPServer, SFTPAttri
     SFTPHandle, SFTP_OK, AUTH_SUCCESSFUL, OPEN_SUCCEEDED
     
     
-statcmd = [b'/bin/stat', b'-c',
-           b'%n %u %g %U %G %f %s %X %Y']
+statcmd = ['/bin/stat', '-c',
+           '%n %u %g %U %G %f %s %X %Y']
     
 
 def parse_ls(raw_output, target_dir='/'):
-    lines = raw_output.split(b'\n')
+    lines = raw_output.split('\n')
     for l in lines:
         if len(l)>0:
             pass
@@ -28,7 +28,7 @@ def parse_terse_stats(raw_output):
     for l in lines:
         els = l.split(b' ')
         attr = SFTPAttributes()
-        attr.filename = els[0].decode('utf-8')
+        attr.filename = os.path.basename( els[0].decode('utf-8') )
         attr.st_size = int(els[6])
         attr.st_uid = int(els[1])
         attr.st_gid = int(els[2])
@@ -61,24 +61,24 @@ class Docker_SFTP_Server (SFTPServerInterface):
         buffer = self.exec_collect(['/bin/ls', path])
         lines = buffer.split(b'\n')
         lines.pop()
-        btpath = bytearray(path, 'utf-8')
         for i in range(len(lines)):
-            lines[i] = btpath+lines[i]
-
-        return parse_terse_stats(buffer)
+            lines[i] = path+'/'+lines[i].decode('utf-8')
+        buffer = self.exec_collect([*statcmd, *lines])
+        fst = parse_terse_stats(buffer)
+        return fst
     
     def exec_collect(self, cmds):
+        # cmds must be in unicode, but output will in bytes
         outs = self.container.exec_run(cmds, stream=True)
         buffer = bytearray()
-        for c in outs:
+        for c in outs.output:
             buffer += c
         return buffer
     
     def stat(self, path):
-        buffer = self.exec_collect(['/bin/stat', path])
-        buffer.rtrim()
-        
-        pass
+        buffer = self.exec_collect([*statcmd, path])
+        fst = parse_terse_stats(buffer)
+        return fst[0]
     
 if __name__=='__main__':
     import subprocess
