@@ -91,13 +91,3 @@ class Docker_SFTP_Server (SFTPServerInterface):
         pass
     
     
-if __name__=='__main__':
-    import subprocess
-    lso = subprocess.run(['/bin/ls', '/etc'], capture_output=True).stdout
-    lines = lso.split(b'\n')
-    lines.pop() # last element is useless
-    for i in range(len(lines)):
-        lines[i] = b'/etc/'+lines[i]
-    statso = subprocess.run([*statcmd, *lines], capture_output=True).stdout
-    results = parse_terse_stats(statso)
-    pass
