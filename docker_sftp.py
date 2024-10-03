@@ -40,7 +40,17 @@ def parse_terse_stats(raw_output):
 
 
 class Docker_SFTP_Handle (SFTPHandle):
-    pass
+    def __init__(self, flags=0):
+        pass
+    
+    # XXX: Use /bin/dd to read & write data
+    def write(self, offset, data):
+        pass
+    
+    def read(self, offset, length):
+        pass
+    
+    # def stat
 
 
 class Docker_SFTP_Server (SFTPServerInterface):
@@ -67,6 +77,7 @@ class Docker_SFTP_Server (SFTPServerInterface):
         fst = parse_terse_stats(buffer)
         return fst
     
+    # XXX: should also return exit status
     def exec_collect(self, cmds):
         # cmds must be in unicode, but output will in bytes
         outs = self.container.exec_run(cmds, stream=True)
@@ -86,7 +97,7 @@ class Docker_SFTP_Server (SFTPServerInterface):
         return buffer.decode('utf-8')
     
     def open(self, path, flags, attr):
-        path = self.realpath(path)
+        path = os.path.realpath(path)
         
         pass
     
