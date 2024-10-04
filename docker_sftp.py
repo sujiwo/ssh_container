@@ -5,10 +5,12 @@ Created on Sep 30, 2024
 '''
 
 import os
+import errno
 from pathlib import Path
 import docker
 from paramiko import ServerInterface, SFTPServerInterface, SFTPServer, SFTPAttributes, \
     SFTPHandle, SFTP_OK, AUTH_SUCCESSFUL, OPEN_SUCCEEDED
+from docker_sftp_handler import Docker_SFTP_Handle 
     
     
 statcmd = ['/bin/stat', '-c',
@@ -37,20 +39,6 @@ def parse_terse_stats(raw_output):
         attr.st_mtime = int(els[8])
         attributes.append(attr)
     return attributes
-
-
-class Docker_SFTP_Handle (SFTPHandle):
-    def __init__(self, flags=0):
-        pass
-    
-    # XXX: Use /bin/dd to read & write data
-    def write(self, offset, data):
-        pass
-    
-    def read(self, offset, length):
-        pass
-    
-    # def stat
 
 
 class Docker_SFTP_Server (SFTPServerInterface):
@@ -84,7 +72,7 @@ class Docker_SFTP_Server (SFTPServerInterface):
     def exec_collect(self, cmds):
         output = [0, bytearray()]
         # cmds must be in unicode, but output will in bytes
-        outs = self.container.exec_run(cmds, stream=True)
+        outs = self.container.exec_run(cmds, stream=True, stdout=True, stderr=False)
         if outs[0] is None:
             output[0] = 0
         else:
@@ -101,13 +89,31 @@ class Docker_SFTP_Server (SFTPServerInterface):
         fst = parse_terse_stats(out[1])
         return fst[0]
     
+    def lstat(self, path):
+        return self.stat(path)
+    
     def realpath(self, path):
         buffer = self.exec_collect(['/bin/realpath', path])
         return buffer.decode('utf-8')
     
     def open(self, path, flags, attr):
         path = os.path.realpath(path)
+
+        # Check if file already exist
+        # | Command | Description              |
+        # |---------|--------------------------|
+        # | -e      | File/directory exists    |
+        # | -f      | is a file                |
+        # | -d      | is a directory           |
+        # | -s      | File size greater than 0 |
+        # | -L      | is a link                |
+        # | -S      | is a socket              |
         
-        pass
-    
+        outs = self.exec_collect('[ -e "$PATH" ]')[0] 
+        if outs != 0:
+            if flags & os.O_RDONLY:
+                return SFTPServer.convert_errno(errno.ENOENT)
+        hdl = Docker_SFTP_Handle(self, flags)
+        hdl.filename = path
+        return hdl
     
