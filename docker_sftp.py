@@ -68,28 +68,37 @@ class Docker_SFTP_Server (SFTPServerInterface):
         return SFTPServerInterface.canonicalize(self, path)
     
     def list_folder(self, path):
-        buffer = self.exec_collect(['/bin/ls', path])
+        o = self.exec_collect(['/bin/ls', path])
+        if o[0]!=0 :
+            return SFTPServer.convert_errno(o[0])
+        buffer = o[1]
         lines = buffer.split(b'\n')
         lines.pop()
         for i in range(len(lines)):
             lines[i] = path+'/'+lines[i].decode('utf-8')
-        buffer = self.exec_collect([*statcmd, *lines])
+        buffer = self.exec_collect([*statcmd, *lines])[1]
         fst = parse_terse_stats(buffer)
         return fst
     
     # XXX: should also return exit status
     def exec_collect(self, cmds):
+        output = [0, bytearray()]
         # cmds must be in unicode, but output will in bytes
         outs = self.container.exec_run(cmds, stream=True)
-        buffer = bytearray()
+        if outs[0] is None:
+            output[0] = 0
+        else:
+            output[0] = outs[0]
         for c in outs.output:
-            buffer += c
-        return buffer
+            output[1] += c
+        return output
     
     def stat(self, path):
-        path = self.realpath(path).rstrip()
-        buffer = self.exec_collect([*statcmd, path])
-        fst = parse_terse_stats(buffer)
+        path = os.path.realpath(path)
+        out = self.exec_collect([*statcmd, path])
+        if out[0]!=0:
+            return SFTPServer.convert_errno(out[0])
+        fst = parse_terse_stats(out[1])
         return fst[0]
     
     def realpath(self, path):
