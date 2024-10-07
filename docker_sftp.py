@@ -81,6 +81,10 @@ class Docker_SFTP_Server (SFTPServerInterface):
             output[1] += c
         return output
     
+    def exec_write(self, cmds):
+        outs = self.container.exec_run(cmds, stream=False, socket=True, stdin=True, stdout=True, stderr=False)
+        return outs
+    
     def stat(self, path):
         path = os.path.realpath(path)
         out = self.exec_collect([*statcmd, path])

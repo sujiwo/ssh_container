@@ -7,12 +7,14 @@ Created on Oct 4, 2024
 import os
 import errno
 from paramiko import SFTPHandle, SFTPServer
+from paramiko.sftp import SFTP_OP_UNSUPPORTED, SFTP_OK
 
 
 class Docker_SFTP_Handle (SFTPHandle):
     def __init__(self, si, flags=0):
+        super().__init__(flags)
+        self.__tell = None
         self.interface = si
-        pass
     
     def close(self):
         pass
@@ -21,7 +23,17 @@ class Docker_SFTP_Handle (SFTPHandle):
     # please use coreutils' dd
     # not Busybox' dd
     def write(self, offset, data):
-        pass
+        ddcmd = ['/bin/dd',
+                 'of={}'.format(self.filename),
+                 'seek={}B'.format(offset),
+                 'count={}B'.format(len(data))]
+        handle = self.interface.exec_write(ddcmd)
+        handle[1].send(data)
+        if self.__tell is None:
+            self.__tell = offset
+        else:
+            self.__tell += len(data)
+        return SFTP_OK
     
     def read(self, offset, length):
         ddcmd = ['/bin/dd',
